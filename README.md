@@ -18,11 +18,43 @@ See **[PROJECT_PLAN.md](PROJECT_PLAN.md)** for the full design.
 | `app/dashboard/` — unified dashboard (day/week, **review queue**, settings) | ✅ |
 | `app/src-tauri/` — native **tray app** with **autostart-on-login** | ✅ builds, bundles to `.msi`/`.exe` |
 
-## Get it running from source
+## Install (for everyone — no technical setup)
 
-Build the app once, install it, and it starts automatically on every login and lives in
-your system tray. The AI model is bundled into the installer — end users never install
-anything extra. Below is the full setup for a fresh machine.
+You do **not** need Rust, Node, or any build tools. The installer is self-contained: the
+app, the AI classifier, and everything else are inside it. Pick one:
+
+**Windows — one command.** Open **PowerShell** (tap Start, type "PowerShell", Enter) and paste:
+
+```powershell
+irm https://raw.githubusercontent.com/idhanth17/screen-track/master/scripts/install.ps1 | iex
+```
+
+That downloads the app, installs it (no admin prompt), adds a Desktop icon, and launches it into
+your system tray. It then starts automatically every time you log in, and the built-in AI is
+already active — nothing else to do.
+
+**Windows — or just download & double-click.** Grab **ScreenTrack-Setup.exe** from the
+[latest release](https://github.com/idhanth17/screen-track/releases/latest) and double-click it.
+
+**macOS — one command.** Open **Terminal** and paste:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/idhanth17/screen-track/master/scripts/install.sh | bash
+```
+
+(macOS installs require a published `.dmg`, which must be built on a Mac — see below. Grant
+**Accessibility** permission when the app asks, so it can see the foreground app.)
+
+Then, in each browser you use, load the companion extension for per-site / per-YouTube-channel
+detail — see **[extension/README.md](extension/README.md)** (Chrome, Edge, Brave, Firefox).
+
+---
+
+## Build from source (for developers)
+
+Only needed if you're changing the code or producing the installers. Build once, install, and
+it starts automatically on every login and lives in the tray. The AI model is bundled into the
+installer — end users never install anything extra. Below is the full setup for a fresh machine.
 
 ### 1. Install the prerequisites (one time)
 
