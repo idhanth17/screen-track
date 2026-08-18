@@ -1,0 +1,29 @@
+# Rust / Cargo
+/target
+**/target
+# Cargo.lock is committed (this is an application, not a library)
+
+# Node / extension tooling (extension itself is plain JS, no build)
+node_modules/
+dist/
+*.log
+
+# Tauri
+app/src-tauri/target/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local data / secrets
+*.sqlite
+*.sqlite-*
+.env
+
+# Chrome "Pack extension" artifacts (we load unpacked; never commit the private key)
+extension.crx
+extension.pem
+*.crx
+*.pem

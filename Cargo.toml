@@ -1,0 +1,10 @@
+# Cargo workspace root. `core` is the shared engine; the Tauri app crate
+# (app/src-tauri) will be added as a member once the UI is scaffolded.
+[workspace]
+resolver = "2"
+members = ["core", "app/src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"

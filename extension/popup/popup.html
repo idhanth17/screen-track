@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <div class="title">Screen&nbsp;Track</div>
+    <div class="date" id="date"></div>
+  </header>
+
+  <section class="summary">
+    <div class="total" id="total">0m</div>
+    <div class="bars" id="bars"></div>
+  </section>
+
+  <section class="channels">
+    <div class="section-head">
+      <span>Activity today</span>
+      <label class="review-toggle"><input type="checkbox" id="reviewOnly" /> needs review</label>
+    </div>
+    <div id="list" class="list"></div>
+    <div id="empty" class="empty">Nothing tracked yet today. Browse a site or watch a video to see it classified.</div>
+  </section>
+
+  <footer>Corrections are remembered per site/channel — you only fix each one once.</footer>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

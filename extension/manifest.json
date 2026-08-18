@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Screen Track — YouTube Classifier",
+  "version": "0.1.0",
+  "description": "Automatically classifies YouTube activity by channel (Study vs Entertainment vs ...) on-device, and remembers your corrections.",
+  "permissions": ["storage", "idle", "alarms", "tabs", "notifications"],
+  "host_permissions": ["*://*.youtube.com/*", "http://127.0.0.1:47113/*"],
+  "icons": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png" },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["content/yt-dom.js"],
+      "run_at": "document_idle",
+      "world": "ISOLATED"
+    },
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["content/yt-page.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Screen Track",
+    "default_icon": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png" }
+  }
+}

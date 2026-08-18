@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Screen Track</title>
+  <link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo">S</span> Screen&nbsp;Track</div>
+
+    <div class="daynav">
+      <button id="prev" class="navbtn" title="Previous day">‹</button>
+      <span id="dayLabel" class="daylabel"></span>
+      <button id="next" class="navbtn" title="Next day">›</button>
+      <button id="todayBtn" class="navbtn today">Today</button>
+    </div>
+
+    <div class="head-right">
+      <div class="total" id="total">0m</div>
+      <div class="seg" id="viewSeg">
+        <button class="seg-btn active" data-view="day">Day</button>
+        <button class="seg-btn" data-view="week">Week</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div id="dayView">
+      <section class="card">
+        <h2>By category</h2>
+        <div id="cats" class="cats"></div>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <h2>Activity</h2>
+          <div class="tabs" id="tabs">
+            <button class="tab active" data-src="all">All</button>
+            <button class="tab" data-src="app">Desktop apps</button>
+            <button class="tab" data-src="site">Websites</button>
+            <button class="tab" data-src="youtube">YouTube</button>
+          </div>
+        </div>
+        <div id="activities" class="activities"></div>
+        <div id="empty" class="empty">Nothing tracked for this day.</div>
+      </section>
+    </div>
+
+    <div id="weekView" hidden>
+      <section class="card">
+        <h2>Last 7 days</h2>
+        <div id="weekbars" class="weekbars"></div>
+        <div id="weekLegend" class="legend"></div>
+      </section>
+    </div>
+  </main>
+
+  <footer id="status" class="statusbar">connecting…</footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

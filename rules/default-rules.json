@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "note": "Canonical default classification data. Shared conceptually by the browser extension (extension/data/rules.js) and the future Rust core. Keep the two in sync until a build step generates one from the other.",
+  "categories": ["work", "productivity", "study", "entertainment", "social", "uncategorized"],
+
+  "youtubeCategoryMap": {
+    "Education": "study",
+    "Science & Technology": "study",
+    "Howto & Style": "study",
+    "News & Politics": "productivity",
+    "Nonprofits & Activism": "productivity",
+    "Entertainment": "entertainment",
+    "Comedy": "entertainment",
+    "Film & Animation": "entertainment",
+    "Trailers": "entertainment",
+    "Gaming": "entertainment",
+    "Music": "entertainment",
+    "People & Blogs": "entertainment",
+    "Sports": "entertainment",
+    "Travel & Events": "entertainment",
+    "Pets & Animals": "entertainment",
+    "Autos & Vehicles": "entertainment"
+  },
+
+  "titleSignals": {
+    "study": ["lecture", "tutorial", "course", "explained", "how to", "crash course", "lesson", "documentary", "masterclass", "walkthrough", "deep dive", "full course", "step by step"],
+    "entertainment": ["reaction", "vlog", "funny", "gameplay", "trailer", "prank", "unboxing", "highlights", "meme", "tier list", "compilation", "shorts"]
+  },
+
+  "domainMap": {
+    "coursera.org": "study",
+    "udemy.com": "study",
+    "khanacademy.org": "study",
+    "edx.org": "study",
+    "brilliant.org": "study",
+    "stackoverflow.com": "productivity",
+    "developer.mozilla.org": "productivity",
+    "docs.google.com": "productivity",
+    "notion.so": "productivity",
+    "github.com": "work",
+    "gitlab.com": "work",
+    "netflix.com": "entertainment",
+    "primevideo.com": "entertainment",
+    "hotstar.com": "entertainment",
+    "twitch.tv": "entertainment",
+    "reddit.com": "social",
+    "twitter.com": "social",
+    "x.com": "social",
+    "instagram.com": "social",
+    "facebook.com": "social",
+    "linkedin.com": "social"
+  },
+
+  "confidence": {
+    "rule": 1.0,
+    "learned": 0.98,
+    "youtubeCategory": 0.8,
+    "titleSignal": 0.55,
+    "domain": 0.85,
+    "fallback": 0.2,
+    "reviewThreshold": 0.6
+  }
+}

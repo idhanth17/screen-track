@@ -1,0 +1,203 @@
+"use strict";
+
+const CATS = ["work", "productivity", "study", "entertainment", "social", "uncategorized"];
+const CAT_VAR = {
+  work: "--work", productivity: "--productivity", study: "--study",
+  entertainment: "--entertainment", social: "--social", uncategorized: "--uncategorized"
+};
+
+// Transport: Tauri invoke when embedded, else HTTP against the loopback server.
+const TAURI = window.__TAURI__ && window.__TAURI__.core;
+async function json(url, opts) {
+  const r = await fetch(url, Object.assign({ cache: "no-store" }, opts));
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+async function api(cmd, args = {}) {
+  if (TAURI) return TAURI.invoke(cmd, args);
+  if (cmd === "overview") return json("/overview" + (args.date ? `?date=${args.date}` : ""));
+  if (cmd === "week") return json("/week" + (args.date ? `?date=${args.date}` : ""));
+  if (cmd === "correct")
+    return json("/correct", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(args) });
+}
+
+// ---- state ----
+const state = { date: todayStr(), view: "day", filter: "all" };
+
+function todayStr() {
+  const d = new Date(), p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function addDays(ds, n) {
+  const [y, m, d] = ds.split("-").map(Number);
+  const dt = new Date(y, m - 1, d + n), p = (x) => String(x).padStart(2, "0");
+  return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
+}
+function prettyDate(ds) {
+  const [y, m, d] = ds.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  if (ds === todayStr()) return "Today";
+  if (ds === addDays(todayStr(), -1)) return "Yesterday";
+  return dt.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
+// ---- helpers ----
+function fmt(ms) {
+  const s = Math.round(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${s}s`;
+}
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#64748b";
+}
+function el(tag, cls, html) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html != null) e.innerHTML = html;
+  return e;
+}
+function esc(s) {
+  return String(s || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+function setStatus(text, cls) {
+  const s = document.getElementById("status");
+  s.textContent = text;
+  s.className = "statusbar" + (cls ? " " + cls : "");
+}
+
+// ---- day view ----
+function renderDay(ov) {
+  document.getElementById("total").textContent = fmt(ov.total_ms) + " tracked";
+
+  const cats = document.getElementById("cats");
+  cats.innerHTML = "";
+  const max = Math.max(1, ...ov.by_category.map(([, ms]) => ms));
+  if (!ov.by_category.length) cats.appendChild(el("div", "empty", "No categories."));
+  for (const [name, ms] of ov.by_category) {
+    const color = cssVar(CAT_VAR[name] || "--uncategorized");
+    const row = el("div", "cat-row");
+    row.appendChild(el("span", "cat-name", esc(name)));
+    const track = el("span", "cat-track");
+    track.appendChild(el("span", "cat-fill")).style.cssText = `width:${(ms / max) * 100}%;background:${color}`;
+    row.appendChild(track);
+    row.appendChild(el("span", "cat-val", fmt(ms)));
+    cats.appendChild(row);
+  }
+
+  const list = document.getElementById("activities");
+  list.innerHTML = "";
+  const rows = ov.activities.filter((a) => state.filter === "all" || a.source === state.filter);
+  document.getElementById("empty").style.display = rows.length ? "none" : "block";
+
+  for (const a of rows) {
+    const row = el("div", "act");
+    row.appendChild(el("span", `badge ${a.source}`, a.source === "youtube" ? "YouTube" : a.source[0].toUpperCase() + a.source.slice(1)));
+
+    const name = el("div", "act-name");
+    const title = el("div", "act-title", esc(a.name));
+    if (a.needs_review) title.appendChild(el("span", "review-flag", "needs review"));
+    name.appendChild(title);
+    if (a.detail) name.appendChild(el("div", "act-sub", esc(a.detail)));
+    row.appendChild(name);
+
+    const select = el("select", "cat-select");
+    for (const c of CATS) {
+      const opt = el("option", null, c);
+      opt.value = c;
+      if (c === a.category) opt.selected = true;
+      select.appendChild(opt);
+    }
+    select.addEventListener("change", async () => {
+      try {
+        await api("correct", { key: a.key, category: select.value, date: state.date });
+        refresh();
+      } catch (_) {}
+    });
+    row.appendChild(select);
+
+    row.appendChild(el("span", "act-time", fmt(a.ms)));
+    list.appendChild(row);
+  }
+}
+
+// ---- week view ----
+function renderWeek(days) {
+  const wrap = document.getElementById("weekbars");
+  wrap.innerHTML = "";
+  const maxTotal = Math.max(1, ...days.map((d) => d.total_ms));
+  const seen = new Set();
+
+  for (const day of days) {
+    const row = el("div", "week-row");
+    row.appendChild(el("span", "week-day", prettyDate(day.date)));
+    const track = el("span", "week-track");
+    for (const [cat, ms] of day.by_category) {
+      seen.add(cat);
+      const seg = el("span", "week-seg");
+      seg.style.cssText = `width:${(ms / maxTotal) * 100}%;background:${cssVar(CAT_VAR[cat] || "--uncategorized")}`;
+      seg.title = `${cat}: ${fmt(ms)}`;
+      track.appendChild(seg);
+    }
+    row.appendChild(track);
+    row.appendChild(el("span", "week-total", fmt(day.total_ms)));
+    wrap.appendChild(row);
+  }
+
+  const legend = document.getElementById("weekLegend");
+  legend.innerHTML = "";
+  for (const cat of CATS.filter((c) => seen.has(c))) {
+    const item = el("div", "legend-item");
+    item.appendChild(el("span", "dot")).style.background = cssVar(CAT_VAR[cat]);
+    item.appendChild(el("span", null, cat));
+    legend.appendChild(item);
+  }
+}
+
+// ---- orchestration ----
+async function refresh() {
+  document.getElementById("dayLabel").textContent = prettyDate(state.date);
+  document.getElementById("next").disabled = state.date >= todayStr();
+  document.getElementById("dayView").hidden = state.view !== "day";
+  document.getElementById("weekView").hidden = state.view !== "week";
+
+  try {
+    if (state.view === "day") {
+      renderDay(await api("overview", { date: state.date }));
+    } else {
+      renderWeek(await api("week", { date: state.date }));
+    }
+    setStatus((state.date === todayStr() ? "live · " : "") + "updated " + new Date().toLocaleTimeString(), "live");
+  } catch (e) {
+    setStatus("tracker not reachable — is Screen Track running?", "stale");
+  }
+}
+
+document.getElementById("prev").addEventListener("click", () => { state.date = addDays(state.date, -1); refresh(); });
+document.getElementById("next").addEventListener("click", () => {
+  if (state.date < todayStr()) { state.date = addDays(state.date, 1); refresh(); }
+});
+document.getElementById("todayBtn").addEventListener("click", () => { state.date = todayStr(); refresh(); });
+document.getElementById("tabs").addEventListener("click", (e) => {
+  const b = e.target.closest(".tab");
+  if (!b) return;
+  state.filter = b.dataset.src;
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t === b));
+  refresh();
+});
+document.getElementById("viewSeg").addEventListener("click", (e) => {
+  const b = e.target.closest(".seg-btn");
+  if (!b) return;
+  state.view = b.dataset.view;
+  document.querySelectorAll(".seg-btn").forEach((t) => t.classList.toggle("active", t === b));
+  refresh();
+});
+
+refresh();
+// Live refresh only when viewing today's day view, and never over an open dropdown.
+setInterval(() => {
+  if (state.date === todayStr() && state.view === "day") {
+    if (document.activeElement && document.activeElement.tagName === "SELECT") return;
+    refresh();
+  }
+}, 3000);
