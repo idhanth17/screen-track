@@ -70,8 +70,24 @@ function heuristicYouTube(signals) {
   return null;
 }
 
+/**
+ * Look up a domain in the map, honoring subdomains: "en.wikipedia.org" and
+ * "mail.google.com" resolve by walking up to a listed parent ("wikipedia.org",
+ * but "mail.google.com" is itself listed so it wins first). First hit, most
+ * specific first.
+ */
+export function domainCategory(domain) {
+  if (!domain) return null;
+  const labels = domain.split(".");
+  for (let i = 0; i < labels.length - 1; i++) {
+    const candidate = labels.slice(i).join(".");
+    if (RULES.domainMap[candidate]) return RULES.domainMap[candidate];
+  }
+  return null;
+}
+
 function heuristicDomain(signals) {
-  const cat = signals.domain && RULES.domainMap[signals.domain];
+  const cat = domainCategory(signals.domain);
   if (cat) return { category: cat, confidence: C.domain, detail: "domain-list" };
   return null;
 }

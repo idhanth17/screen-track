@@ -27,13 +27,7 @@ fn today() -> (i64, i64, String) {
 }
 
 fn data_path() -> PathBuf {
-    let mut dir = std::env::var_os("LOCALAPPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."));
-    dir.push("ScreenTrack");
-    let _ = std::fs::create_dir_all(&dir);
-    dir.push("screentrack.sqlite");
-    dir
+    run::default_db_path()
 }
 
 fn print_overview(conn: &rusqlite::Connection) {

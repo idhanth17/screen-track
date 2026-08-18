@@ -13,13 +13,21 @@ pub struct Snapshot {
 #[cfg(windows)]
 mod windows;
 
+#[cfg(target_os = "macos")]
+mod macos;
+
 #[cfg(windows)]
 pub fn snapshot() -> Snapshot {
     windows::snapshot()
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
 pub fn snapshot() -> Snapshot {
-    // macOS/Linux capture lands in Phase 3.
+    macos::snapshot()
+}
+
+// Linux / other: no native capture yet — the browser extension still works.
+#[cfg(not(any(windows, target_os = "macos")))]
+pub fn snapshot() -> Snapshot {
     Snapshot { foreground: None, idle_ms: 0 }
 }

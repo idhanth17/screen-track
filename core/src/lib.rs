@@ -11,5 +11,6 @@ pub mod classify;
 pub mod capture;
 pub mod store;
 pub mod run;
+pub mod ai;
 
 pub use model::{BrowserEntity, Category, Foreground, Segment};

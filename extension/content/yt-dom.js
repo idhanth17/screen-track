@@ -6,9 +6,13 @@
 let currentVideoId = null;
 let pendingPlayerData = null;
 
+// Firefox: promise-based `browser`; Chromium: `chrome`.
+const B = globalThis.browser ?? globalThis.chrome;
+
 function send(msg) {
   try {
-    chrome.runtime.sendMessage(msg, () => void chrome.runtime.lastError);
+    // Fire-and-forget; swallow "receiving end does not exist" while the SW naps.
+    Promise.resolve(B.runtime.sendMessage(msg)).catch(() => {});
   } catch (_) { /* SW asleep / context invalidated */ }
 }
 

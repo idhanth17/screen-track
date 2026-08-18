@@ -31,15 +31,41 @@ fn now_ms() -> i64 {
     Local::now().timestamp_millis()
 }
 
-/// The default on-disk database location (`%LOCALAPPDATA%/ScreenTrack/...`).
-pub fn default_db_path() -> std::path::PathBuf {
-    let mut dir = std::env::var_os("LOCALAPPDATA")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
-    dir.push("ScreenTrack");
+/// Per-OS application data root:
+/// Windows `%LOCALAPPDATA%`, macOS `~/Library/Application Support`,
+/// Linux `$XDG_DATA_HOME` (or `~/.local/share`).
+fn data_root() -> std::path::PathBuf {
+    use std::path::PathBuf;
+    #[cfg(windows)]
+    if let Some(p) = std::env::var_os("LOCALAPPDATA") {
+        return PathBuf::from(p);
+    }
+    #[cfg(target_os = "macos")]
+    if let Some(home) = std::env::var_os("HOME") {
+        return PathBuf::from(home).join("Library").join("Application Support");
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        if let Some(p) = std::env::var_os("XDG_DATA_HOME") {
+            return PathBuf::from(p);
+        }
+        if let Some(home) = std::env::var_os("HOME") {
+            return PathBuf::from(home).join(".local").join("share");
+        }
+    }
+    PathBuf::from(".")
+}
+
+/// The Screen Track data directory (created if missing).
+pub fn data_dir() -> std::path::PathBuf {
+    let dir = data_root().join("ScreenTrack");
     let _ = std::fs::create_dir_all(&dir);
-    dir.push("screentrack.sqlite");
     dir
+}
+
+/// The default on-disk database location inside [`data_dir`].
+pub fn default_db_path() -> std::path::PathBuf {
+    data_dir().join("screentrack.sqlite")
 }
 
 /// Compute the unified overview for the current local day.
@@ -146,6 +172,63 @@ pub fn capture_loop(db_path: &str, running: Arc<AtomicBool>) -> Result<()> {
     Ok(())
 }
 
+/// Background AI enrichment: periodically embed unresolved channels/domains with
+/// the bundled MiniLM model and cache the verdict, shrinking the review queue on
+/// its own. The model is loaded once (it's ~90 MB); if no model directory is
+/// available (e.g. a dev run without bundled resources) the loop simply exits and
+/// the heuristics stand.
+pub fn enrich_loop(db_path: &str, running: Arc<AtomicBool>, model_dir: Option<std::path::PathBuf>) {
+    use crate::ai::Classifier;
+
+    let conn = match store::open(db_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("[warn] enrich: db open failed: {e}");
+            return;
+        }
+    };
+
+    let classifier = match model_dir {
+        Some(dir) if dir.join("model.safetensors").exists() => match Classifier::load(&dir) {
+            Ok(c) => {
+                eprintln!("[ai] built-in model loaded from {}", dir.display());
+                c
+            }
+            Err(e) => {
+                eprintln!("[ai] model load failed ({e}); AI classification disabled");
+                return;
+            }
+        },
+        _ => {
+            eprintln!("[ai] no bundled model found; AI classification disabled");
+            return;
+        }
+    };
+
+    // Gentle cadence: check for work about every 20s. Embedding is fast on CPU
+    // and only runs when there's an unresolved entity.
+    let mut wait = Duration::from_secs(18); // first pass shortly after startup
+    while running.load(Ordering::SeqCst) {
+        if wait >= Duration::from_secs(20) {
+            wait = Duration::ZERO;
+            if store::get_settings(&conn).unwrap_or_default().ai_enabled {
+                if let Ok(cands) = store::entities_needing_ai(&conn, 8) {
+                    for cand in cands {
+                        if !running.load(Ordering::SeqCst) {
+                            break;
+                        }
+                        if let Some(cat) = classifier.classify(&cand) {
+                            let _ = store::learn_ai_category(&conn, &cand.key, cat.as_str(), now_ms());
+                        }
+                    }
+                }
+            }
+        }
+        std::thread::sleep(Duration::from_millis(500));
+        wait += Duration::from_millis(500);
+    }
+}
+
 fn header(name: &str, value: &str) -> Header {
     Header::from_bytes(name.as_bytes(), value.as_bytes()).unwrap()
 }
@@ -246,6 +329,30 @@ fn handle(conn: &Connection, mut req: tiny_http::Request) {
                     serve_text(req, &serde_json::to_string(&map).unwrap_or_else(|_| "{}".into()), "application/json; charset=utf-8");
                 }
                 Err(_) => serve_text(req, "{}", "application/json; charset=utf-8"),
+            }
+        }
+
+        // App settings (AI toggle + Ollama endpoint/model).
+        (Method::Get, "/settings") => match store::get_settings(conn) {
+            Ok(s) => serve_text(req, &serde_json::to_string(&s).unwrap_or_else(|_| "{}".into()), "application/json; charset=utf-8"),
+            Err(_) => serve_text(req, "{}", "application/json; charset=utf-8"),
+        },
+        (Method::Post, "/settings") => {
+            let mut body = String::new();
+            if req.as_reader().read_to_string(&mut body).is_err() {
+                let _ = req.respond(cors(Response::empty(400)));
+                return;
+            }
+            match serde_json::from_str::<store::Settings>(&body) {
+                Ok(s) => {
+                    if let Err(e) = store::set_settings(conn, &s) {
+                        eprintln!("[warn] set_settings failed: {e}");
+                    }
+                    serve_text(req, "{\"ok\":true}", "application/json");
+                }
+                Err(_) => {
+                    let _ = req.respond(cors(Response::empty(400)));
+                }
             }
         }
 

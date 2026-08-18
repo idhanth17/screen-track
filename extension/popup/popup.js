@@ -10,6 +10,9 @@ const COLORS = {
 };
 const CATS = RULES.categories;
 
+// Firefox: promise-based `browser`; Chromium: `chrome`.
+const B = globalThis.browser ?? globalThis.chrome;
+
 const $ = (id) => document.getElementById(id);
 
 function fmt(ms) {
@@ -22,7 +25,7 @@ function fmt(ms) {
 }
 
 function send(msg) {
-  return new Promise((res) => chrome.runtime.sendMessage(msg, res));
+  return B.runtime.sendMessage(msg);
 }
 
 function render(state) {

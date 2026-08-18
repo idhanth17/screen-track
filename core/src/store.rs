@@ -52,6 +52,12 @@ CREATE TABLE IF NOT EXISTS browser_entity_daily (
     updated_at   INTEGER NOT NULL,
     PRIMARY KEY (date, key)
 );
+
+-- Single-row key/value app settings (AI toggle, Ollama endpoint, etc.).
+CREATE TABLE IF NOT EXISTS settings (
+    k TEXT PRIMARY KEY,
+    v TEXT NOT NULL
+);
 "#;
 
 /// Open (creating if needed) the database and ensure the schema exists.
@@ -133,6 +139,11 @@ pub fn memory_set(
 }
 
 /// Upsert a batch of per-day browser entities (cumulative ms overwrites prior).
+///
+/// Learned memory (a manual correction or an AI label) is the source of truth
+/// for an entity's category: if the core has already resolved this key, that
+/// category wins over whatever the extension reports, so a resolved item never
+/// bounces back to "uncategorized" on the next push.
 pub fn ingest_entities(
     conn: &Connection,
     date: &str,
@@ -141,6 +152,14 @@ pub fn ingest_entities(
 ) -> Result<()> {
     let tx = conn.unchecked_transaction()?;
     for e in entities {
+        let mut category = e.category.clone();
+        let mut source = e.source.clone();
+        let mut needs_review = e.needs_review;
+        if let Ok(Some(cat)) = memory_lookup(&tx, &e.key) {
+            category = cat.as_str().to_string();
+            needs_review = false;
+            if source.is_empty() { source = "learned".to_string(); }
+        }
         tx.execute(
             "INSERT INTO browser_entity_daily
                (date, key, kind, name, domain, channel_id, yt_category, category, ms, source, needs_review, updated_at)
@@ -152,7 +171,7 @@ pub fn ingest_entities(
                needs_review=excluded.needs_review, updated_at=excluded.updated_at",
             params![
                 date, e.key, e.kind, e.name, e.domain, e.channel_id, e.yt_category,
-                e.category, e.ms, e.source, e.needs_review as i64, now_ms
+                category, e.ms, source, needs_review as i64, now_ms
             ],
         )?;
     }
@@ -160,16 +179,71 @@ pub fn ingest_entities(
     Ok(())
 }
 
+/// A browser entity the classifier couldn't confidently place — a candidate for
+/// AI enrichment. Carries just enough context to describe it to the model.
+#[derive(Debug, Clone)]
+pub struct AiCandidate {
+    pub key: String,
+    pub kind: String,
+    pub name: String,
+    pub domain: Option<String>,
+    pub yt_category: Option<String>,
+}
+
+/// Distinct unresolved entities (uncategorized or flagged) that have no learned
+/// memory yet — the work list for the Ollama enrichment pass.
+pub fn entities_needing_ai(conn: &Connection, limit: i64) -> Result<Vec<AiCandidate>> {
+    let mut stmt = conn.prepare(
+        "SELECT key, kind, name, domain, yt_category
+           FROM browser_entity_daily b
+          WHERE (b.needs_review = 1 OR b.category = 'uncategorized')
+            AND NOT EXISTS (SELECT 1 FROM category_memory m WHERE m.key = b.key)
+          GROUP BY b.key
+          ORDER BY MAX(b.updated_at) DESC
+          LIMIT ?1",
+    )?;
+    let rows = stmt
+        .query_map(params![limit], |r| {
+            Ok(AiCandidate {
+                key: r.get(0)?,
+                kind: r.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                name: r.get(2)?,
+                domain: r.get::<_, Option<String>>(3)?,
+                yt_category: r.get::<_, Option<String>>(4)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
+/// Write an AI-derived category: unlocked learned memory (so a later user
+/// correction still overrides it) plus a retag of every day's tally for the key.
+pub fn learn_ai_category(conn: &Connection, key: &str, category: &str, now_ms: i64) -> Result<()> {
+    conn.execute(
+        "INSERT INTO category_memory (key, display_name, category, locked, updated_at)
+         VALUES (?1, ?1, ?2, 0, ?3)
+         ON CONFLICT(key) DO UPDATE SET category=excluded.category, updated_at=excluded.updated_at
+         WHERE category_memory.locked = 0",
+        params![key, category, now_ms],
+    )?;
+    conn.execute(
+        "UPDATE browser_entity_daily SET category=?1, source='ai', needs_review=0 WHERE key=?2",
+        params![category, key],
+    )?;
+    Ok(())
+}
+
 /// One row in the unified dashboard: a desktop app, a site, or a YouTube channel.
 #[derive(Debug, Serialize)]
 pub struct Activity {
     pub key: String,    // "app:code.exe" | "domain:.." | "channel:.." — for corrections
-    pub source: String, // "app" | "site" | "youtube"
+    pub source: String, // "app" | "site" | "youtube" (entity kind)
     pub name: String,
     pub category: String,
     pub ms: i64,
     pub needs_review: bool,
-    pub detail: String, // domain, YouTube category, etc.
+    pub detail: String,       // domain, YouTube category, etc.
+    pub class_source: String, // how it was categorized: manual | ai | learned | heuristic | ...
 }
 
 /// The unified day view the dashboard renders.
@@ -192,17 +266,17 @@ pub fn overview(conn: &Connection, from_ms: i64, to_ms: i64, date: &str) -> Resu
     // Native apps — browsers excluded (the extension provides their real breakdown).
     {
         let mut stmt = conn.prepare(
-            "SELECT app, category, SUM(end_ms - start_ms)
+            "SELECT app, category, SUM(end_ms - start_ms), MIN(source)
              FROM activity_segment
              WHERE idle = 0 AND start_ms >= ?1 AND start_ms < ?2
              GROUP BY app, category",
         )?;
         let rows = stmt.query_map(params![from_ms, to_ms], |r| {
-            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)?))
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)?, r.get::<_, Option<String>>(3)?))
         })?;
         let self_apps = ["screen-track-app.exe", "screentrackd.exe"];
         for row in rows {
-            let (app, category, ms) = row?;
+            let (app, category, ms, src) = row?;
             if app == "(none)" || is_browser(&app) || self_apps.contains(&app.to_lowercase().as_str()) {
                 continue;
             }
@@ -215,6 +289,7 @@ pub fn overview(conn: &Connection, from_ms: i64, to_ms: i64, date: &str) -> Resu
                 ms,
                 needs_review: false,
                 detail: String::new(),
+                class_source: src.unwrap_or_default(),
             });
         }
     }
@@ -222,7 +297,7 @@ pub fn overview(conn: &Connection, from_ms: i64, to_ms: i64, date: &str) -> Resu
     // Browser entities (sites + YouTube channels) for the day.
     {
         let mut stmt = conn.prepare(
-            "SELECT key, kind, name, domain, yt_category, category, ms, needs_review
+            "SELECT key, kind, name, domain, yt_category, category, ms, needs_review, source
              FROM browser_entity_daily WHERE date = ?1",
         )?;
         let rows = stmt.query_map(params![date], |r| {
@@ -235,10 +310,11 @@ pub fn overview(conn: &Connection, from_ms: i64, to_ms: i64, date: &str) -> Resu
                 r.get::<_, String>(5)?,
                 r.get::<_, i64>(6)?,
                 r.get::<_, i64>(7)?,
+                r.get::<_, Option<String>>(8)?,
             ))
         })?;
         for row in rows {
-            let (key, kind, name, domain, yt, category, ms, nr) = row?;
+            let (key, kind, name, domain, yt, category, ms, nr, src) = row?;
             if matches!(domain.as_deref(), Some("127.0.0.1") | Some("localhost")) {
                 continue;
             }
@@ -252,6 +328,7 @@ pub fn overview(conn: &Connection, from_ms: i64, to_ms: i64, date: &str) -> Resu
                 ms,
                 needs_review: nr != 0,
                 detail: if is_yt { yt.unwrap_or_default() } else { domain.unwrap_or_default() },
+                class_source: src.unwrap_or_default(),
             });
         }
     }
@@ -309,6 +386,53 @@ pub struct DaySummary {
     pub date: String,
     pub total_ms: i64,
     pub by_category: Vec<(String, i64)>,
+}
+
+/// User-facing app settings, persisted in the `settings` key/value table.
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Settings {
+    /// Auto-classify unknown channels/sites with the built-in on-device AI model.
+    /// On by default — the model ships with the app; nothing to install.
+    pub ai_enabled: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings { ai_enabled: true }
+    }
+}
+
+fn get_kv(conn: &Connection, k: &str) -> Result<Option<String>> {
+    let mut stmt = conn.prepare("SELECT v FROM settings WHERE k = ?1")?;
+    let mut rows = stmt.query(params![k])?;
+    Ok(match rows.next()? {
+        Some(row) => Some(row.get::<_, String>(0)?),
+        None => None,
+    })
+}
+
+fn set_kv(conn: &Connection, k: &str, v: &str) -> Result<()> {
+    conn.execute(
+        "INSERT INTO settings (k, v) VALUES (?1, ?2)
+         ON CONFLICT(k) DO UPDATE SET v = excluded.v",
+        params![k, v],
+    )?;
+    Ok(())
+}
+
+/// Read persisted settings, falling back to defaults for any unset field.
+pub fn get_settings(conn: &Connection) -> Result<Settings> {
+    let d = Settings::default();
+    Ok(Settings {
+        ai_enabled: get_kv(conn, "ai_enabled")?.map(|v| v == "1" || v == "true").unwrap_or(d.ai_enabled),
+    })
+}
+
+/// Persist settings.
+pub fn set_settings(conn: &Connection, s: &Settings) -> Result<()> {
+    set_kv(conn, "ai_enabled", if s.ai_enabled { "1" } else { "0" })?;
+    Ok(())
 }
 
 /// Category totals for each of the last `days` days ending at `end_date` (inclusive).

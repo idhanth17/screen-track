@@ -27,3 +27,7 @@ extension.crx
 extension.pem
 *.crx
 *.pem
+
+# Bundled AI model weights (~87MB) — fetched via scripts/fetch-model.ps1, not committed.
+# The small config.json + tokenizer.json ARE committed so only the weights need fetching.
+app/src-tauri/resources/minilm/model.safetensors

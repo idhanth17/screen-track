@@ -23,6 +23,7 @@
         <button class="seg-btn active" data-view="day">Day</button>
         <button class="seg-btn" data-view="week">Week</button>
       </div>
+      <button id="settingsBtn" class="navbtn" title="Settings">⚙</button>
     </div>
   </header>
 
@@ -41,6 +42,7 @@
             <button class="tab" data-src="app">Desktop apps</button>
             <button class="tab" data-src="site">Websites</button>
             <button class="tab" data-src="youtube">YouTube</button>
+            <button class="tab tab-review" data-src="review">Review <span id="reviewCount" class="count" hidden>0</span></button>
           </div>
         </div>
         <div id="activities" class="activities"></div>
@@ -56,6 +58,34 @@
       </section>
     </div>
   </main>
+
+  <div id="settingsOverlay" class="overlay" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <h2>Settings</h2>
+        <button id="settingsClose" class="navbtn" title="Close">✕</button>
+      </div>
+
+      <div class="setting">
+        <label class="switch">
+          <input type="checkbox" id="aiEnabled" />
+          <span>Auto-classify unknowns with the built-in AI</span>
+        </label>
+        <p class="hint">
+          A small AI model (MiniLM) ships inside the app and labels channels and sites the
+          built-in rules can't place — automatically, in the background. It runs entirely on
+          your computer: no account, no setup, no cost, nothing ever leaves your device.
+          Its guesses land as normal categories; correct any once and it's remembered forever.
+        </p>
+        <div id="aiStatus" class="ollama-status">Built-in model: active</div>
+      </div>
+
+      <div class="modal-foot">
+        <span id="settingsMsg" class="hint"></span>
+        <button id="settingsSave" class="btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
 
   <footer id="status" class="statusbar">connecting…</footer>
 

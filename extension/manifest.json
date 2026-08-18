@@ -3,11 +3,18 @@
   "name": "Screen Track — YouTube Classifier",
   "version": "0.1.0",
   "description": "Automatically classifies YouTube activity by channel (Study vs Entertainment vs ...) on-device, and remembers your corrections.",
-  "permissions": ["storage", "idle", "alarms", "tabs", "notifications"],
+  "permissions": ["storage", "idle", "alarms", "tabs"],
   "host_permissions": ["*://*.youtube.com/*", "http://127.0.0.1:47113/*"],
   "icons": { "16": "icons/16.png", "32": "icons/32.png", "48": "icons/48.png", "128": "icons/128.png" },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "screen-track@screentrack.app",
+      "strict_min_version": "128.0"
+    }
+  },
   "background": {
     "service_worker": "background.js",
+    "scripts": ["background.js"],
     "type": "module"
   },
   "content_scripts": [

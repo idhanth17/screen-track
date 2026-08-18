@@ -14,11 +14,28 @@ async function json(url, opts) {
   return r.json();
 }
 async function api(cmd, args = {}) {
-  if (TAURI) return TAURI.invoke(cmd, args);
+  if (TAURI) {
+    // Tauri commands use snake_case names; map the HTTP-style verbs to them.
+    if (cmd === "get_settings") return TAURI.invoke("get_settings");
+    if (cmd === "set_settings") return TAURI.invoke("set_settings", { settings: args });
+    return TAURI.invoke(cmd, args);
+  }
   if (cmd === "overview") return json("/overview" + (args.date ? `?date=${args.date}` : ""));
   if (cmd === "week") return json("/week" + (args.date ? `?date=${args.date}` : ""));
   if (cmd === "correct")
     return json("/correct", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(args) });
+  if (cmd === "get_settings") return json("/settings");
+  if (cmd === "set_settings")
+    return json("/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(args) });
+}
+
+// Short, friendly label for how an item got its category.
+function sourceTag(cs) {
+  if (cs === "manual") return { txt: "you", cls: "manual" };
+  if (cs === "ai") return { txt: "AI", cls: "ai" };
+  if (cs === "rule") return { txt: "rule", cls: "" };
+  if (cs === "learned") return { txt: "learned", cls: "" };
+  return { txt: "auto", cls: "" };
 }
 
 // ---- state ----
@@ -85,10 +102,26 @@ function renderDay(ov) {
     cats.appendChild(row);
   }
 
+  // The review queue is anything we're unsure about: explicitly flagged, or
+  // simply still uncategorized (that's the honest "we don't know" bucket).
+  const needsReview = (a) => a.needs_review || a.category === "uncategorized";
+
+  const reviewN = ov.activities.filter(needsReview).length;
+  const countEl = document.getElementById("reviewCount");
+  countEl.textContent = reviewN;
+  countEl.hidden = reviewN === 0;
+  document.querySelector(".tab-review").classList.toggle("has-review", reviewN > 0);
+
   const list = document.getElementById("activities");
   list.innerHTML = "";
-  const rows = ov.activities.filter((a) => state.filter === "all" || a.source === state.filter);
-  document.getElementById("empty").style.display = rows.length ? "none" : "block";
+  const rows = ov.activities.filter((a) =>
+    state.filter === "all" ? true : state.filter === "review" ? needsReview(a) : a.source === state.filter
+  );
+  const emptyEl = document.getElementById("empty");
+  emptyEl.style.display = rows.length ? "none" : "block";
+  emptyEl.textContent = state.filter === "review"
+    ? "Nothing to review — everything's classified. 🎉"
+    : "Nothing tracked for this day.";
 
   for (const a of rows) {
     const row = el("div", "act");
@@ -96,7 +129,11 @@ function renderDay(ov) {
 
     const name = el("div", "act-name");
     const title = el("div", "act-title", esc(a.name));
-    if (a.needs_review) title.appendChild(el("span", "review-flag", "needs review"));
+    if (needsReview(a)) title.appendChild(el("span", "review-flag", "needs review"));
+    else {
+      const tag = sourceTag(a.class_source);
+      title.appendChild(el("span", `src-tag ${tag.cls}`, tag.txt));
+    }
     name.appendChild(title);
     if (a.detail) name.appendChild(el("div", "act-sub", esc(a.detail)));
     row.appendChild(name);
@@ -198,6 +235,49 @@ refresh();
 setInterval(() => {
   if (state.date === todayStr() && state.view === "day") {
     if (document.activeElement && document.activeElement.tagName === "SELECT") return;
+    if (!document.getElementById("settingsOverlay").hidden) return; // don't churn under the modal
     refresh();
   }
 }, 3000);
+
+// ---- settings modal ----
+const overlay = document.getElementById("settingsOverlay");
+const aiEnabled = document.getElementById("aiEnabled");
+const aiStatusEl = document.getElementById("aiStatus");
+const settingsMsg = document.getElementById("settingsMsg");
+
+function syncAiStatus() {
+  if (aiEnabled.checked) {
+    aiStatusEl.textContent = "Built-in model: active";
+    aiStatusEl.className = "ollama-status ok";
+  } else {
+    aiStatusEl.textContent = "Built-in model: off — unknowns stay in the review queue for you";
+    aiStatusEl.className = "ollama-status";
+  }
+}
+
+async function openSettings() {
+  settingsMsg.textContent = "";
+  try {
+    const s = await api("get_settings");
+    aiEnabled.checked = s.aiEnabled !== false; // default on
+  } catch (_) { aiEnabled.checked = true; }
+  syncAiStatus();
+  overlay.hidden = false;
+}
+
+async function saveSettings() {
+  try {
+    await api("set_settings", { aiEnabled: aiEnabled.checked });
+    settingsMsg.textContent = "Saved.";
+    setTimeout(() => { overlay.hidden = true; }, 500);
+  } catch (_) {
+    settingsMsg.textContent = "Couldn't save settings.";
+  }
+}
+
+document.getElementById("settingsBtn").addEventListener("click", openSettings);
+document.getElementById("settingsClose").addEventListener("click", () => { overlay.hidden = true; });
+overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.hidden = true; });
+document.getElementById("settingsSave").addEventListener("click", saveSettings);
+aiEnabled.addEventListener("change", syncAiStatus);

@@ -7,12 +7,29 @@ auto-sorting your time into **study / entertainment / productivity / social / �
 with corrections remembered forever. Each site/channel is a first-class "entity",
 so this data slots straight into the unified multi-source (desktop + mobile) view.
 
-## Load it (Chrome or Edge)
+## Load it
 
-1. Open `chrome://extensions` (or `edge://extensions`).
+The same folder runs on all four browsers (one manifest — Chromium reads
+`background.service_worker`, Firefox reads `background.scripts`; every API call
+goes through `browser`/`chrome`, both promise-based in MV3).
+
+**Chrome / Edge / Brave** (Chromium)
+
+1. Open `chrome://extensions` (Edge: `edge://extensions`, Brave: `brave://extensions`).
 2. Turn on **Developer mode** (top-right).
 3. Click **Load unpacked** and select this `extension/` folder.
 4. Pin the extension so its icon shows in the toolbar.
+
+**Firefox** (128+)
+
+1. Open `about:debugging#/runtime/this-firefox`.
+2. Click **Load Temporary Add-on…** and pick any file inside this `extension/`
+   folder (e.g. `manifest.json`).
+3. The add-on stays until you restart Firefox (that's how temporary add-ons work;
+   a signed `.xpi` is only needed for permanent install).
+
+No notifications on any browser — anything the rules can't place lands silently
+in the **Review** queue in the Screen Track app, where you reclassify at leisure.
 
 ## Try it
 

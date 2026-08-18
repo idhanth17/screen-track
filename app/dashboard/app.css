@@ -55,9 +55,11 @@ main { max-width: 960px; margin: 0 auto; padding: 22px 26px 64px; display: grid;
 .cat-val { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .tabs { display: flex; gap: 4px; background: var(--panel-2); padding: 4px; border-radius: 10px; }
-.tab { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 7px; cursor: pointer; }
+.tab { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 7px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .tab:hover { color: var(--text); }
 .tab.active { background: var(--panel); color: var(--text); }
+.tab .count { background: #f59e0b; color: #1a1206; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 0 6px; min-width: 18px; text-align: center; line-height: 17px; }
+.tab-review.has-review { color: #fbbf24; }
 
 .activities { display: grid; gap: 2px; }
 .act { display: grid; grid-template-columns: 74px 1fr auto auto; align-items: center; gap: 14px; padding: 9px 8px; border-radius: 10px; }
@@ -71,7 +73,32 @@ main { max-width: 960px; margin: 0 auto; padding: 22px 26px 64px; display: grid;
 .act-sub { font-size: 12px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .act-time { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 56px; text-align: right; }
 .review-flag { color: #fbbf24; font-size: 11px; font-weight: 600; margin-left: 6px; }
+.src-tag { font-size: 10px; font-weight: 600; letter-spacing: .3px; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; color: var(--muted); background: var(--panel-2); }
+.src-tag.ai { color: #5eead4; background: color-mix(in srgb, #14b8a6 22%, transparent); }
+.src-tag.manual { color: #93c5fd; background: color-mix(in srgb, #3b82f6 22%, transparent); }
 select.cat-select { font: inherit; font-size: 12px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); color: var(--text); text-transform: capitalize; }
+
+/* settings modal */
+.overlay { position: fixed; inset: 0; background: rgba(2,6,16,.66); backdrop-filter: blur(3px); display: grid; place-items: center; z-index: 20; }
+.overlay[hidden] { display: none; }
+.modal { width: min(460px, calc(100vw - 40px)); background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; box-shadow: 0 24px 60px rgba(0,0,0,.5); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.modal-head h2 { margin: 0; font-size: 16px; text-transform: none; letter-spacing: 0; color: var(--text); }
+.setting { margin: 16px 0 6px; }
+.switch { display: flex; align-items: center; gap: 10px; font-weight: 600; cursor: pointer; }
+.switch input { width: 16px; height: 16px; accent-color: #14b8a6; }
+.hint { color: var(--faint); font-size: 12px; margin: 8px 0 0; line-height: 1.5; }
+.ai-config { margin-top: 14px; display: grid; gap: 12px; transition: opacity .2s; }
+.ai-config.disabled { opacity: .4; pointer-events: none; }
+.field { display: grid; gap: 5px; }
+.field label { font-size: 12px; color: var(--muted); }
+.field input { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: var(--text); }
+.ollama-status { font-size: 12px; padding: 8px 10px; border-radius: 8px; background: var(--panel-2); color: var(--muted); }
+.ollama-status.ok { color: #34d399; }
+.ollama-status.bad { color: #fbbf24; }
+.modal-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; }
+.btn-primary { border: 0; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; font: inherit; font-weight: 600; padding: 9px 18px; border-radius: 9px; cursor: pointer; }
+.btn-primary:hover { filter: brightness(1.08); }
 
 .weekbars { display: grid; gap: 12px; }
 .week-row { display: grid; grid-template-columns: 96px 1fr 60px; align-items: center; gap: 12px; }

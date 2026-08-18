@@ -14,6 +14,11 @@ import {
   addTime, rememberIfNew, reclassifyEntity
 } from "./lib/storage.js";
 
+// Cross-browser handle. Firefox exposes the promise-based `browser`; Chrome/
+// Edge/Brave expose `chrome` (also promise-based in MV3). We use promises
+// throughout so the same code runs on all four.
+const B = globalThis.browser ?? globalThis.chrome;
+
 const MAX_INTERVAL_MS = 90_000;
 
 // Bump when the storage shape changes; older data is wiped once on next load.
@@ -23,11 +28,12 @@ let migrated = null;
 function ensureMigrated() {
   if (!migrated) {
     migrated = (async () => {
-      const { schemaVersion } = await chrome.storage.local.get("schemaVersion");
+      const { schemaVersion } = await B.storage.local.get("schemaVersion");
       if (schemaVersion !== SCHEMA_VERSION) {
-        await chrome.storage.local.set({
-          daily: {}, memory: {}, notified: {}, openCtx: null, schemaVersion: SCHEMA_VERSION
+        await B.storage.local.set({
+          daily: {}, memory: {}, openCtx: null, schemaVersion: SCHEMA_VERSION
         });
+        await B.storage.local.remove("notified"); // legacy: notifications removed
       }
     })();
   }
@@ -36,7 +42,7 @@ function ensureMigrated() {
 
 // ---- live driver state ----
 let browserFocused = true;             // is any Chrome window the OS-foreground?
-let idleState = "active";              // chrome.idle state
+let idleState = "active";              // B.idle state
 const ytByTab = {};                    // tabId -> {channelName, channelId, ytCategory, title}
 
 function activeNow() {
@@ -77,7 +83,7 @@ function signalsForTab(tab) {
 
 async function activeTab() {
   try {
-    const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    const tabs = await B.tabs.query({ active: true, lastFocusedWindow: true });
     return tabs && tabs[0];
   } catch (_) {
     return null;
@@ -125,28 +131,8 @@ async function recompute() {
   await rememberIfNew(decision.memoryKey, decision.category, signals.channelName || signals.appName);
   await setOpenCtx({ active: activeNow(), signals, decision, lastTickTs: now });
 
-  if (decision.category === "uncategorized" && decision.needsReview) {
-    await maybeNotify(signals);
-  }
-}
-
-// Notify once per entity we can't categorize, with quick-fix buttons.
-async function maybeNotify(signals) {
-  const key = memoryKey(signals);
-  if (!key) return;
-  const { notified = {} } = await chrome.storage.local.get("notified");
-  if (notified[key]) return;
-  const name = signals.channelName || signals.appName || signals.domain || key;
-  chrome.notifications.create("st:" + key, {
-    type: "basic",
-    iconUrl: "icons/128.png",
-    title: "Screen Track — categorize?",
-    message: `Couldn't auto-categorize “${name}”. Pick one, or open the popup for others.`,
-    buttons: [{ title: "Study" }, { title: "Entertainment" }],
-    priority: 1
-  });
-  notified[key] = true;
-  await chrome.storage.local.set({ notified });
+  // No notifications: anything we can't place lands silently in the app's
+  // review queue (needsReview), where the user reclassifies at their leisure.
 }
 
 // Apply a correction and retag the open context if it's the current entity.
@@ -167,7 +153,7 @@ async function pullCorrections() {
     const res = await fetch(CORE_BASE + "/corrections", { cache: "no-store" });
     if (!res.ok) return;
     const map = await res.json(); // { "channel:..": "study", "domain:..": "social" }
-    const { memory = {} } = await chrome.storage.local.get("memory");
+    const { memory = {} } = await B.storage.local.get("memory");
     for (const [key, category] of Object.entries(map)) {
       const cur = memory[key];
       if (!cur || cur.category !== category || !cur.locked) {
@@ -242,52 +228,41 @@ async function handle(msg, sender) {
   }
 }
 
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+B.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   enqueue(() => handle(msg, sender)).then(sendResponse, () => sendResponse({ ok: false }));
   return true;
 });
 
-chrome.notifications.onButtonClicked.addListener((notifId, idx) => {
-  if (!notifId.startsWith("st:")) return;
-  const key = notifId.slice(3);
-  const category = idx === 0 ? "study" : "entertainment";
-  enqueue(async () => {
-    await applyCorrection(key, category);
-    await pushToCore();
-    chrome.notifications.clear(notifId);
-  });
-});
-
 // ---- events that change "what's in front of the user" ----
-chrome.tabs.onActivated.addListener(() => enqueue(recompute));
-chrome.tabs.onUpdated.addListener((_id, changeInfo, tab) => {
+B.tabs.onActivated.addListener(() => enqueue(recompute));
+B.tabs.onUpdated.addListener((_id, changeInfo, tab) => {
   if (tab && tab.active && (changeInfo.url || changeInfo.status === "complete")) enqueue(recompute);
 });
-chrome.tabs.onRemoved.addListener((tabId) => { delete ytByTab[tabId]; });
-chrome.windows.onFocusChanged.addListener((windowId) => {
-  browserFocused = windowId !== chrome.windows.WINDOW_ID_NONE;
+B.tabs.onRemoved.addListener((tabId) => { delete ytByTab[tabId]; });
+B.windows.onFocusChanged.addListener((windowId) => {
+  browserFocused = windowId !== B.windows.WINDOW_ID_NONE;
   enqueue(recompute);
 });
 
 try {
-  chrome.idle.setDetectionInterval(60);
-  chrome.idle.onStateChanged.addListener((state) => {
+  B.idle.setDetectionInterval(60);
+  B.idle.onStateChanged.addListener((state) => {
     idleState = state;
     enqueue(recompute);
   });
 } catch (_) { /* idle API unavailable */ }
 
 // Heartbeat so continuous viewing is counted even while the SW naps.
-chrome.alarms.create("tick", { periodInMinutes: 1 });
-chrome.alarms.onAlarm.addListener((a) => {
+B.alarms.create("tick", { periodInMinutes: 1 });
+B.alarms.onAlarm.addListener((a) => {
   if (a.name === "tick") enqueue(async () => { await recompute(); await pushToCore(); });
 });
-chrome.runtime.onInstalled.addListener(() => chrome.alarms.create("tick", { periodInMinutes: 1 }));
+B.runtime.onInstalled.addListener(() => B.alarms.create("tick", { periodInMinutes: 1 }));
 
 // Initialize focus state, then take a first reading.
 enqueue(async () => {
   try {
-    const w = await chrome.windows.getLastFocused();
+    const w = await B.windows.getLastFocused();
     browserFocused = !!(w && w.focused);
   } catch (_) { /* default true */ }
   await recompute();

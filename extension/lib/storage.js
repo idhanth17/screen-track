@@ -8,6 +8,9 @@
 import { RULES } from "../data/rules.js";
 import { memoryKey } from "./classifier.js";
 
+// Firefox: promise-based `browser`; Chromium: `chrome` (promise-based in MV3).
+const B = globalThis.browser ?? globalThis.chrome;
+
 export function todayKey(ts = Date.now()) {
   const d = new Date(ts);
   const p = (n) => String(n).padStart(2, "0");
@@ -15,10 +18,10 @@ export function todayKey(ts = Date.now()) {
 }
 
 function get(keys) {
-  return new Promise((res) => chrome.storage.local.get(keys, res));
+  return B.storage.local.get(keys);
 }
 function set(obj) {
-  return new Promise((res) => chrome.storage.local.set(obj, res));
+  return B.storage.local.set(obj);
 }
 
 export async function getMemory() {
