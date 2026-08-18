@@ -7,6 +7,21 @@ auto-sorting your time into **study / entertainment / productivity / social / �
 with corrections remembered forever. Each site/channel is a first-class "entity",
 so this data slots straight into the unified multi-source (desktop + mobile) view.
 
+## Get it
+
+- **From the app:** open Screen Track → ⚙ Settings → **Browser extension → Download**. It also
+  shows a live **Connected / Not connected** indicator.
+- **Direct download:** grab **screen-track-extension.zip** from the
+  [latest release](https://github.com/idhanth17/screen-track/releases/latest) and unzip it.
+- **From source:** just use this `extension/` folder in the repo.
+
+Then load the unpacked folder in your browser (below). The extension **auto-connects** to the
+Screen Track app on `127.0.0.1:47113` — no configuration.
+
+> Why load unpacked instead of a store install? The Chrome Web Store charges a one-time
+> developer fee and Firefox Add-ons requires a signed submission under the author's account, so
+> for now the extension is distributed as a folder you load yourself (a one-time, ~4-click step).
+
 ## Load it
 
 The same folder runs on all four browsers (one manifest — Chromium reads
@@ -17,7 +32,7 @@ goes through `browser`/`chrome`, both promise-based in MV3).
 
 1. Open `chrome://extensions` (Edge: `edge://extensions`, Brave: `brave://extensions`).
 2. Turn on **Developer mode** (top-right).
-3. Click **Load unpacked** and select this `extension/` folder.
+3. Click **Load unpacked** and select the unzipped `screen-track-extension` (or repo `extension/`) folder.
 4. Pin the extension so its icon shows in the toolbar.
 
 **Firefox** (128+)

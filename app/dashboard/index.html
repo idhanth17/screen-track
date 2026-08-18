@@ -23,6 +23,7 @@
         <button class="seg-btn active" data-view="day">Day</button>
         <button class="seg-btn" data-view="week">Week</button>
       </div>
+      <button id="extChip" class="chip chip-off" title="Browser extension status — click for setup">🧩 <span id="extChipText">Extension</span></button>
       <button id="settingsBtn" class="navbtn" title="Settings">⚙</button>
     </div>
   </header>
@@ -78,6 +79,32 @@
           Its guesses land as normal categories; correct any once and it's remembered forever.
         </p>
         <div id="aiStatus" class="ollama-status">Built-in model: active</div>
+      </div>
+
+      <div class="setting">
+        <div class="ext-head">
+          <span class="setting-title">Browser extension</span>
+          <span id="extStatusPill" class="pill pill-off">Not connected</span>
+        </div>
+        <p class="hint">
+          The extension adds per-website and per-YouTube-channel detail and
+          <strong>auto-connects</strong> to this app. Install it once in each browser you use:
+          download it, unzip, then load it (Chrome/Edge/Brave: <em>Extensions → Developer mode →
+          Load unpacked</em>; Firefox: <em>about:debugging → Load Temporary Add-on</em>).
+        </p>
+        <div class="ext-actions">
+          <button id="extDownload" class="btn-secondary">Download extension</button>
+          <button id="extSteps" class="btn-link">Full steps</button>
+        </div>
+      </div>
+
+      <div class="setting danger">
+        <span class="setting-title">Delete Screen Track</span>
+        <p class="hint">
+          Permanently uninstalls the app and <strong>deletes all its data</strong> (tracked time,
+          learned categories, settings) and shortcuts. This can't be undone.
+        </p>
+        <button id="uninstallBtn" class="btn-danger">Delete app &amp; all data</button>
       </div>
 
       <div class="modal-foot">

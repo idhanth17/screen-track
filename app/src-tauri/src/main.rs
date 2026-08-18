@@ -61,6 +61,82 @@ fn get_settings(state: tauri::State<AppState>) -> Result<store::Settings, String
     store::get_settings(&conn).map_err(|e| e.to_string())
 }
 
+/// Whether the browser extension has reported in recently (live indicator).
+#[tauri::command]
+fn extension_status(state: tauri::State<AppState>) -> Result<store::ExtensionStatus, String> {
+    let conn = store::open(&state.db_path).map_err(|e| e.to_string())?;
+    Ok(store::extension_status(&conn, chrono::Local::now().timestamp_millis()))
+}
+
+/// Open a URL in the user's default browser (used by the "Download extension" button).
+#[tauri::command]
+fn open_url(url: String) {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", "start", "", &url])
+            .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+            .spawn();
+    }
+    #[cfg(target_os = "macos")]
+    let _ = std::process::Command::new("open").arg(&url).spawn();
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
+}
+
+/// Fully uninstall Screen Track: turn off start-at-login, then (after the app
+/// exits) run the installer's uninstaller, wipe all local data, and remove
+/// shortcuts. Everything is deleted permanently.
+#[tauri::command]
+fn uninstall_app(app: tauri::AppHandle) {
+    let _ = app.autolaunch().disable();
+    let data_dir = run::data_dir();
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const DETACHED_PROCESS: u32 = 0x0000_0008;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+        let install_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf()));
+        let uninstaller = install_dir.map(|d| d.join("uninstall.exe"));
+        let desktop = std::env::var("USERPROFILE").ok().map(|h| format!("{h}\\Desktop\\Screen Track.lnk"));
+
+        // Detached script: wait for us to exit, run the uninstaller, wipe data + shortcuts.
+        let mut ps = String::from("Start-Sleep -Seconds 2; ");
+        if let Some(u) = &uninstaller {
+            let u = u.display();
+            ps.push_str(&format!("if (Test-Path '{u}') {{ Start-Process '{u}' -ArgumentList '/S' -Wait }}; "));
+        }
+        ps.push_str(&format!("Remove-Item -Recurse -Force '{}' -ErrorAction SilentlyContinue; ", data_dir.display()));
+        if let Some(d) = &desktop {
+            ps.push_str(&format!("Remove-Item -Force '{d}' -ErrorAction SilentlyContinue; "));
+        }
+        ps.push_str("Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'Screen Track' -ErrorAction SilentlyContinue;");
+
+        let _ = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &ps])
+            .creation_flags(DETACHED_PROCESS | CREATE_NO_WINDOW)
+            .spawn();
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let sh = format!(
+            "sleep 2; rm -rf '/Applications/Screen Track.app'; rm -rf '{}'; \
+             osascript -e 'tell application \"System Events\" to delete login item \"Screen Track\"' 2>/dev/null || true",
+            data_dir.display()
+        );
+        let _ = std::process::Command::new("sh").arg("-c").arg(&sh).spawn();
+    }
+
+    app.exit(0);
+}
+
 #[tauri::command]
 fn set_settings(settings: store::Settings, state: tauri::State<AppState>) -> Result<(), String> {
     let conn = store::open(&state.db_path).map_err(|e| e.to_string())?;
@@ -111,7 +187,8 @@ fn main() {
         ))
         .manage(AppState { db_path })
         .invoke_handler(tauri::generate_handler![
-            overview, week, correct, get_settings, set_settings
+            overview, week, correct, get_settings, set_settings,
+            extension_status, uninstall_app, open_url
         ])
         .setup(move |app| {
             // Spawn AI enrichment now that we can resolve the bundled model dir.

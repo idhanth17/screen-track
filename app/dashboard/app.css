@@ -100,6 +100,28 @@ select.cat-select { font: inherit; font-size: 12px; padding: 4px 6px; border: 1p
 .btn-primary { border: 0; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; font: inherit; font-weight: 600; padding: 9px 18px; border-radius: 9px; cursor: pointer; }
 .btn-primary:hover { filter: brightness(1.08); }
 
+/* header extension chip */
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 999px; cursor: pointer; }
+.chip.chip-on { color: #34d399; border-color: color-mix(in srgb, #34d399 40%, var(--line)); }
+.chip.chip-off { color: var(--faint); }
+.chip::before { content: "●"; font-size: 9px; }
+.chip.chip-on::before { color: #34d399; }
+.chip.chip-off::before { color: var(--faint); }
+
+/* settings sections */
+.setting-title { font-weight: 700; font-size: 14px; }
+.ext-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pill { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+.pill-on { color: #052e2b; background: #34d399; }
+.pill-off { color: #4a1d1d; background: #fca5a5; }
+.ext-actions { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
+.btn-secondary { border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font: inherit; font-weight: 600; padding: 8px 14px; border-radius: 8px; cursor: pointer; }
+.btn-secondary:hover { background: var(--panel); }
+.btn-link { border: 0; background: transparent; color: #7dd3fc; font: inherit; font-size: 12px; cursor: pointer; text-decoration: underline; }
+.setting.danger { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 16px; }
+.btn-danger { border: 1px solid color-mix(in srgb, #ef4444 55%, var(--line)); background: color-mix(in srgb, #ef4444 14%, transparent); color: #fca5a5; font: inherit; font-weight: 600; padding: 8px 14px; border-radius: 8px; cursor: pointer; }
+.btn-danger:hover { background: color-mix(in srgb, #ef4444 26%, transparent); }
+
 .weekbars { display: grid; gap: 12px; }
 .week-row { display: grid; grid-template-columns: 96px 1fr 60px; align-items: center; gap: 12px; }
 .week-day { color: var(--muted); font-size: 13px; }

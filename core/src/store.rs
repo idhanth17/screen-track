@@ -176,7 +176,31 @@ pub fn ingest_entities(
         )?;
     }
     tx.commit()?;
+    // Record that the browser extension just reported in (for the live indicator).
+    let _ = set_kv(conn, "last_ingest_ms", &now_ms.to_string());
     Ok(())
+}
+
+/// Whether the browser extension is currently connected, based on how recently
+/// it last pushed activity to the loopback server.
+#[derive(Debug, Clone, Serialize)]
+pub struct ExtensionStatus {
+    pub connected: bool,
+    pub last_ingest_ms: i64,
+}
+
+/// Extension is considered "live" if it pushed within the last 90s (it pushes on
+/// activity and on a ~60s heartbeat).
+pub fn extension_status(conn: &Connection, now_ms: i64) -> ExtensionStatus {
+    let last = get_kv(conn, "last_ingest_ms")
+        .ok()
+        .flatten()
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(0);
+    ExtensionStatus {
+        connected: last > 0 && (now_ms - last) < 90_000,
+        last_ingest_ms: last,
+    }
 }
 
 /// A browser entity the classifier couldn't confidently place — a candidate for

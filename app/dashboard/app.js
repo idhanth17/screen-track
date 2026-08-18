@@ -27,6 +27,18 @@ async function api(cmd, args = {}) {
   if (cmd === "get_settings") return json("/settings");
   if (cmd === "set_settings")
     return json("/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(args) });
+  if (cmd === "extension_status") return json("/status");
+  // uninstall/open_url are app-only (Tauri); no HTTP equivalent.
+}
+
+// Repo/release URLs for the extension download + docs.
+const REPO = "https://github.com/idhanth17/screen-track";
+const EXT_ZIP = `${REPO}/releases/latest/download/screen-track-extension.zip`;
+const EXT_DOCS = `${REPO}/blob/master/extension/README.md`;
+
+function openExternal(url) {
+  if (TAURI) TAURI.invoke("open_url", { url });
+  else window.open(url, "_blank");
 }
 
 // Short, friendly label for how an item got its category.
@@ -281,3 +293,47 @@ document.getElementById("settingsClose").addEventListener("click", () => { overl
 overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.hidden = true; });
 document.getElementById("settingsSave").addEventListener("click", saveSettings);
 aiEnabled.addEventListener("change", syncAiStatus);
+
+// ---- extension status (live/not-live) ----
+const extChip = document.getElementById("extChip");
+const extChipText = document.getElementById("extChipText");
+const extStatusPill = document.getElementById("extStatusPill");
+
+async function refreshExtStatus() {
+  let connected = false;
+  try { const st = await api("extension_status"); connected = !!(st && st.connected); } catch (_) {}
+  extChip.classList.toggle("chip-on", connected);
+  extChip.classList.toggle("chip-off", !connected);
+  extChipText.textContent = connected ? "Extension live" : "Extension off";
+  if (extStatusPill) {
+    extStatusPill.textContent = connected ? "Connected" : "Not connected";
+    extStatusPill.className = "pill " + (connected ? "pill-on" : "pill-off");
+  }
+}
+extChip.addEventListener("click", openSettings);
+document.getElementById("extDownload").addEventListener("click", () => openExternal(EXT_ZIP));
+document.getElementById("extSteps").addEventListener("click", () => openExternal(EXT_DOCS));
+refreshExtStatus();
+setInterval(refreshExtStatus, 5000);
+
+// ---- uninstall (two-click confirm; native confirm() is unreliable in the webview) ----
+const uninstallBtn = document.getElementById("uninstallBtn");
+let uninstallArmed = false, uninstallTimer = null;
+uninstallBtn.addEventListener("click", async () => {
+  if (!TAURI) {
+    settingsMsg.textContent = "Open the Screen Track app to uninstall it.";
+    return;
+  }
+  if (!uninstallArmed) {
+    uninstallArmed = true;
+    uninstallBtn.textContent = "Click again to permanently delete";
+    uninstallTimer = setTimeout(() => {
+      uninstallArmed = false;
+      uninstallBtn.textContent = "Delete app & all data";
+    }, 4000);
+    return;
+  }
+  clearTimeout(uninstallTimer);
+  uninstallBtn.textContent = "Deleting…";
+  try { await api("uninstall_app"); } catch (_) {}
+});

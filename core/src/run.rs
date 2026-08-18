@@ -332,7 +332,13 @@ fn handle(conn: &Connection, mut req: tiny_http::Request) {
             }
         }
 
-        // App settings (AI toggle + Ollama endpoint/model).
+        // Browser-extension connection status (for the live indicator).
+        (Method::Get, "/status") => {
+            let st = store::extension_status(conn, now_ms());
+            serve_text(req, &serde_json::to_string(&st).unwrap_or_else(|_| "{}".into()), "application/json; charset=utf-8");
+        }
+
+        // App settings (AI toggle).
         (Method::Get, "/settings") => match store::get_settings(conn) {
             Ok(s) => serve_text(req, &serde_json::to_string(&s).unwrap_or_else(|_| "{}".into()), "application/json; charset=utf-8"),
             Err(_) => serve_text(req, "{}", "application/json; charset=utf-8"),
