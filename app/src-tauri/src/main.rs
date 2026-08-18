@@ -185,12 +185,31 @@ fn main() {
             MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
         ))
+        // Self-update: check GitHub Releases on launch; install a newer signed build.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState { db_path })
         .invoke_handler(tauri::generate_handler![
             overview, week, correct, get_settings, set_settings,
             extension_status, uninstall_app, open_url
         ])
         .setup(move |app| {
+            // Self-update: check for a newer signed release and install it. Runs in
+            // the background; on a boot launch the window is hidden so a restart is
+            // invisible. Failures (offline, no update) are silent.
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    use tauri_plugin_updater::UpdaterExt;
+                    if let Ok(updater) = handle.updater() {
+                        if let Ok(Some(update)) = updater.check().await {
+                            if update.download_and_install(|_, _| {}, || {}).await.is_ok() {
+                                handle.restart();
+                            }
+                        }
+                    }
+                });
+            }
+
             // Spawn AI enrichment now that we can resolve the bundled model dir.
             // In a packaged app this is <resources>/minilm; a plain `cargo run`
             // without bundled resources simply won't find it and AI stays off.

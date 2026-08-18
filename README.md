@@ -48,6 +48,11 @@ curl -fsSL https://raw.githubusercontent.com/idhanth17/screen-track/master/scrip
 Then, in each browser you use, load the companion extension for per-site / per-YouTube-channel
 detail — see **[extension/README.md](extension/README.md)** (Chrome, Edge, Brave, Firefox).
 
+**Automatic updates.** Once installed, Screen Track updates itself. On each launch it checks
+GitHub Releases and, if a newer **signed** version exists, downloads and installs it in the
+background — no reinstalling, no commands. (Only builds signed with the project's private key
+are accepted, so an update can't be spoofed.)
+
 ---
 
 ## Build from source (for developers)
@@ -163,6 +168,25 @@ Load the browser extension and watch YouTube get classified per channel:
 4. Built-in AI enrichment — bundled MiniLM model, on by default ✅
 5. Windows `.msi`/`.exe` installer ✅
 6. macOS capture port — code written (`core/src/capture/macos.rs`), **needs a Mac to compile & verify**
+
+## Publishing a release (maintainers)
+
+Auto-update requires each release to be **signed** with the project's updater private key
+(kept in `.keys/`, gitignored — never commit it; losing it breaks updates for installed apps).
+
+1. Bump `version` in `app/src-tauri/tauri.conf.json`.
+2. Build signed (produces the installer + a `.sig`):
+   ```bash
+   cd app
+   export TAURI_SIGNING_PRIVATE_KEY="$(cat ../.keys/screentrack.key)"
+   export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
+   npx @tauri-apps/cli@2 build
+   ```
+3. Generate the update manifest: `powershell -File scripts/make-latest-json.ps1` → `dist/latest.json`.
+4. Package the extension: `powershell -File scripts/package-extension.ps1` → `dist/screen-track-extension.zip`.
+5. Create the release tagged `v<version>` and upload: the renamed installer as **ScreenTrack-Setup.exe**,
+   **latest.json**, and **screen-track-extension.zip**. Installed apps pointed at
+   `releases/latest/download/latest.json` pick up the new version on their next launch.
 
 ## Notes
 
